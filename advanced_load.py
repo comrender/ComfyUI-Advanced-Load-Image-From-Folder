@@ -4,7 +4,6 @@ import hashlib
 from PIL import Image, ImageOps, ImageSequence, ExifTags
 import torch
 import numpy as np
-import folder_paths
 
 class AdvancedLoadImageFromFolder:
     @classmethod
@@ -25,7 +24,6 @@ class AdvancedLoadImageFromFolder:
         if not image_folder or not os.path.isdir(image_folder):
             raise ValueError(f"Invalid or missing folder: {image_folder}")
 
-        # Supported extensions (add more if needed)
         supported_exts = {'.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif', '.tiff', '.tif'}
         files = [
             f for f in os.listdir(image_folder)
@@ -33,38 +31,36 @@ class AdvancedLoadImageFromFolder:
         ]
 
         if not files:
-            raise ValueError(f"No supported images found in folder: {image_folder}")
+            raise ValueError(f"No supported images found in: {image_folder}")
 
-        # Critical: Sort case-insensitively → consistent order on Windows AND Linux
+        # This line fixes your original Linux/Windows sorting issue
         files.sort(key=lambda x: x.lower())
 
         if index >= len(files):
-            raise ValueError(f"Index {index} out of range. Only {len(files)} image(s) found.")
+            index = index % len(files)  # optional: wrap around instead of error
+            # raise ValueError(f"Index {index} out of range ({len(files)} images)")
 
         selected_file = files[index]
         file_path = os.path.join(image_folder, selected_file)
 
         img = Image.open(file_path)
-        img = ImageOps.exif_transpose(img)  # Fix orientation
+        img = ImageOps.exif_transpose(img)
 
-        # Handle animated GIFs / multi-page TIFFs
+        # Support animated GIFs / multi-page TIFFs
         frames = []
         for frame in ImageSequence.Iterator(img):
             frame = frame.convert("RGB")
-            if frame.mode == 'I':
-                frame = frame.point(lambda i: i * (1 / 255.0))
             arr = np.array(frame).astype(np.float32) / 255.0
-            tensor = torch.from_numpy(arr).unsqueeze(0)  # [1, H, W, 3]
+            tensor = torch.from_numpy(arr).unsqueeze(0)
             frames.append(tensor)
 
         image_out = torch.cat(frames, dim=0) if len(frames) > 1 else frames[0]
 
-        # Extract metadata
+        # Metadata extraction
         metadata = {}
         try:
-            if file_path.lower().endswith('.png'):
-                if hasattr(img, 'info'):
-                    metadata = img.info
+            if file_path.lower().endswith('.png') and hasattr(img, 'info'):
+                metadata = img.info
             else:
                 exif = img.getexif()
                 if exif:
@@ -74,7 +70,7 @@ class AdvancedLoadImageFromFolder:
                         if tag in ExifTags.TAGS
                     }
         except Exception as e:
-            print(f"[AdvancedLoadImageFromFolder] Warning: Could not read metadata: {e}")
+            print(f"[AdvancedLoadImageFromFolder] Metadata warning: {e}")
 
         metadata_str = json.dumps(metadata, indent=2, ensure_ascii=False)
 
@@ -82,20 +78,17 @@ class AdvancedLoadImageFromFolder:
 
     @classmethod
     def IS_CHANGED(cls, image_folder, index):
-        # Invalidate cache if folder contents change
         if not os.path.isdir(image_folder):
-            return "invalid_folder"
+            return "invalid"
         try:
-            files = os.listdir(image_folder)
+            files = sorted(os.listdir(image_folder))
             mtime = max(os.path.getmtime(os.path.join(image_folder, f)) for f in files)
-            return f"{hashlib.md5(''.join(sorted(files)).encode()).hexdigest()}_{mtime}_{index}"
+            return f"{hashlib.md5(''.join(files).encode()).hexdigest()}_{mtime}_{index}"
         except:
             return "error"
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Node registration (required!)
-# ─────────────────────────────────────────────────────────────────────────────
+# ────── Required for ComfyUI to detect the node ──────
 NODE_CLASS_MAPPINGS = {
     "Advanced Load Image From Folder": AdvancedLoadImageFromFolder
 }
@@ -104,5 +97,4 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Advanced Load Image From Folder": "Advanced Load Image From Folder"
 }
 
-# Optional: expose for web extensions / search
 __all__ = ['NODE_CLASS_MAPPINGS', 'NODE_DISPLAY_NAME_MAPPINGS']
