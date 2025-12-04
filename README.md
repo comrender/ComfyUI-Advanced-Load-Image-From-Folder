@@ -2,6 +2,7 @@
 <img width="1046" height="599" alt="image" src="https://github.com/user-attachments/assets/368bd935-3ebf-444b-a5a4-d71885c89279" />
 
 A robust custom node that allows you to load images from a local directory with advanced control, metadata extraction, and support for animated formats.
+I took metadata raw componenet from ComfyUI-Crystools and improved decoding. 
 
 This node is designed to fix common issues found in other loaders, specifically regarding **metadata crashes (JSON serialization errors)** and **file ordering**.
 
